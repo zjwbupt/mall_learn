@@ -21,6 +21,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -81,7 +82,7 @@ public class PmsProductServiceImpl implements PmsProductService {
         //满减价格
         relateAndInsertList(productFullReductionDao, productParam.getProductFullReductionList(), productId);
         //处理sku的编码
-        handleSkuStockCode(productParam.getSkuStockList(),productId);
+        handleSkuStockCode(productParam.getSkuStockList(), productId);
         //添加sku库存信息
         relateAndInsertList(skuStockDao, productParam.getSkuStockList(), productId);
         //添加商品参数,添加自定义商品规格
@@ -95,10 +96,10 @@ public class PmsProductServiceImpl implements PmsProductService {
     }
 
     private void handleSkuStockCode(List<PmsSkuStock> skuStockList, Long productId) {
-        if(CollectionUtils.isEmpty(skuStockList))return;
-        for(int i=0;i<skuStockList.size();i++){
+        if (CollectionUtils.isEmpty(skuStockList)) return;
+        for (int i = 0; i < skuStockList.size(); i++) {
             PmsSkuStock skuStock = skuStockList.get(i);
-            if(StrUtil.isEmpty(skuStock.getSkuCode())){
+            if (StrUtil.isEmpty(skuStock.getSkuCode())) {
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
                 StringBuilder sb = new StringBuilder();
                 //日期
@@ -106,7 +107,7 @@ public class PmsProductServiceImpl implements PmsProductService {
                 //四位商品id
                 sb.append(String.format("%04d", productId));
                 //三位索引id
-                sb.append(String.format("%03d", i+1));
+                sb.append(String.format("%03d", i + 1));
                 skuStock.setSkuCode(sb.toString());
             }
         }
@@ -164,7 +165,7 @@ public class PmsProductServiceImpl implements PmsProductService {
         //当前的sku信息
         List<PmsSkuStock> currSkuList = productParam.getSkuStockList();
         //当前没有sku直接删除
-        if(CollUtil.isEmpty(currSkuList)){
+        if (CollUtil.isEmpty(currSkuList)) {
             PmsSkuStockExample skuStockExample = new PmsSkuStockExample();
             skuStockExample.createCriteria().andProductIdEqualTo(id);
             skuStockMapper.deleteByExample(skuStockExample);
@@ -175,27 +176,27 @@ public class PmsProductServiceImpl implements PmsProductService {
         skuStockExample.createCriteria().andProductIdEqualTo(id);
         List<PmsSkuStock> oriStuList = skuStockMapper.selectByExample(skuStockExample);
         //获取新增sku信息
-        List<PmsSkuStock> insertSkuList = currSkuList.stream().filter(item->item.getId()==null).collect(Collectors.toList());
+        List<PmsSkuStock> insertSkuList = currSkuList.stream().filter(item -> item.getId() == null).collect(Collectors.toList());
         //获取需要更新的sku信息
-        List<PmsSkuStock> updateSkuList = currSkuList.stream().filter(item->item.getId()!=null).collect(Collectors.toList());
+        List<PmsSkuStock> updateSkuList = currSkuList.stream().filter(item -> item.getId() != null).collect(Collectors.toList());
         List<Long> updateSkuIds = updateSkuList.stream().map(PmsSkuStock::getId).collect(Collectors.toList());
         //获取需要删除的sku信息
-        List<PmsSkuStock> removeSkuList = oriStuList.stream().filter(item-> !updateSkuIds.contains(item.getId())).collect(Collectors.toList());
-        handleSkuStockCode(insertSkuList,id);
-        handleSkuStockCode(updateSkuList,id);
+        List<PmsSkuStock> removeSkuList = oriStuList.stream().filter(item -> !updateSkuIds.contains(item.getId())).collect(Collectors.toList());
+        handleSkuStockCode(insertSkuList, id);
+        handleSkuStockCode(updateSkuList, id);
         //新增sku
-        if(CollUtil.isNotEmpty(insertSkuList)){
+        if (CollUtil.isNotEmpty(insertSkuList)) {
             relateAndInsertList(skuStockDao, insertSkuList, id);
         }
         //删除sku
-        if(CollUtil.isNotEmpty(removeSkuList)){
+        if (CollUtil.isNotEmpty(removeSkuList)) {
             List<Long> removeSkuIds = removeSkuList.stream().map(PmsSkuStock::getId).collect(Collectors.toList());
             PmsSkuStockExample removeExample = new PmsSkuStockExample();
             removeExample.createCriteria().andIdIn(removeSkuIds);
             skuStockMapper.deleteByExample(removeExample);
         }
         //修改sku
-        if(CollUtil.isNotEmpty(updateSkuList)){
+        if (CollUtil.isNotEmpty(updateSkuList)) {
             for (PmsSkuStock pmsSkuStock : updateSkuList) {
                 skuStockMapper.updateByPrimaryKeySelective(pmsSkuStock);
             }
@@ -208,47 +209,50 @@ public class PmsProductServiceImpl implements PmsProductService {
         PageHelper.startPage(pageNum, pageSize);
         PmsProductExample productExample = new PmsProductExample();
         PmsProductExample.Criteria criteria = productExample.createCriteria();
+
         criteria.andDeleteStatusEqualTo(0);
-        if (productQueryParam.getPublishStatus() != null) {
-            criteria.andPublishStatusEqualTo(productQueryParam.getPublishStatus());
-        }
-        if (productQueryParam.getVerifyStatus() != null) {
-            criteria.andVerifyStatusEqualTo(productQueryParam.getVerifyStatus());
-        }
-        if (!StrUtil.isEmpty(productQueryParam.getKeyword())) {
+        Optional.ofNullable(productQueryParam.getPublishStatus()).ifPresent(criteria::andPublishStatusEqualTo);
+        Optional.ofNullable(productQueryParam.getVerifyStatus()).ifPresent(criteria::andVerifyStatusEqualTo);
+        Optional.ofNullable(productQueryParam.getBrandId()).ifPresent(criteria::andBrandIdEqualTo);
+        Optional.ofNullable(productQueryParam.getProductCategoryId()).ifPresent(criteria::andProductCategoryIdEqualTo);
+
+        if (StrUtil.isNotBlank(productQueryParam.getKeyword())) {
             criteria.andNameLike("%" + productQueryParam.getKeyword() + "%");
         }
-        if (!StrUtil.isEmpty(productQueryParam.getProductSn())) {
+        if (StrUtil.isNotBlank(productQueryParam.getProductSn())) {
             criteria.andProductSnEqualTo(productQueryParam.getProductSn());
         }
-        if (productQueryParam.getBrandId() != null) {
-            criteria.andBrandIdEqualTo(productQueryParam.getBrandId());
-        }
-        if (productQueryParam.getProductCategoryId() != null) {
-            criteria.andProductCategoryIdEqualTo(productQueryParam.getProductCategoryId());
-        }
+
         return productMapper.selectByExample(productExample);
     }
 
+
     @Override
     public int updateVerifyStatus(List<Long> ids, Integer verifyStatus, String detail) {
+        // Prepare product for update
         PmsProduct product = new PmsProduct();
         product.setVerifyStatus(verifyStatus);
+
+        // Set the criteria for update
         PmsProductExample example = new PmsProductExample();
         example.createCriteria().andIdIn(ids);
-        List<PmsProductVertifyRecord> list = new ArrayList<>();
+
+        // Execute the update and get count of updated records
         int count = productMapper.updateByExampleSelective(product, example);
-        //修改完审核状态后插入审核记录
-        for (Long id : ids) {
+
+        // 修改完审核状态后插入审核记录
+        List<PmsProductVertifyRecord> records = ids.stream().map(id -> {
             PmsProductVertifyRecord record = new PmsProductVertifyRecord();
             record.setProductId(id);
             record.setCreateTime(new Date());
             record.setDetail(detail);
             record.setStatus(verifyStatus);
             record.setVertifyMan("test");
-            list.add(record);
-        }
-        productVertifyRecordDao.insertList(list);
+            return record;
+        }).collect(Collectors.toList());
+
+        productVertifyRecordDao.insertList(records);
+
         return count;
     }
 
@@ -293,7 +297,7 @@ public class PmsProductServiceImpl implements PmsProductService {
         PmsProductExample productExample = new PmsProductExample();
         PmsProductExample.Criteria criteria = productExample.createCriteria();
         criteria.andDeleteStatusEqualTo(0);
-        if(!StrUtil.isEmpty(keyword)){
+        if (!StrUtil.isEmpty(keyword)) {
             criteria.andNameLike("%" + keyword + "%");
             productExample.or().andDeleteStatusEqualTo(0).andProductSnLike("%" + keyword + "%");
         }
